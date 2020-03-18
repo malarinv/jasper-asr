@@ -23,7 +23,7 @@ python setup.py install
 ```
 or with pip
 ```bash
-pip install .
+pip install .[server]
 ```
 
 The installation should work on Python 3.6 or newer. Untested on Python 2.7
