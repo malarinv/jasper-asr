@@ -1,8 +1,11 @@
+import os
 import tempfile
 from ruamel.yaml import YAML
 import json
 import nemo
 import nemo.collections.asr as nemo_asr
+import wave
+from nemo.collections.asr.helpers import post_process_predictions
 
 logging = nemo.logging
 
@@ -12,7 +15,9 @@ WORK_DIR = "/tmp"
 class JasperASR(object):
     """docstring for JasperASR."""
 
-    def __init__(self, model_yaml, encoder_checkpoint, decoder_checkpoint):
+    def __init__(
+        self, model_yaml, encoder_checkpoint, decoder_checkpoint, language_model=None
+    ):
         super(JasperASR, self).__init__()
         # Read model YAML
         yaml = YAML(typ="safe")
@@ -36,14 +41,30 @@ class JasperASR(object):
         )
         self.jasper_decoder.restore_from(decoder_checkpoint, local_rank=0)
         self.greedy_decoder = nemo_asr.GreedyCTCDecoder()
+        self.beam_search_with_lm = None
+        if language_model:
+            self.beam_search_with_lm = nemo_asr.BeamSearchDecoderWithLM(
+                vocab=self.labels,
+                beam_width=64,
+                alpha=2.0,
+                beta=1.0,
+                lm_path=language_model,
+                num_cpus=max(os.cpu_count(), 1),
+            )
 
     def transcribe(self, audio_data, greedy=True):
         audio_file = tempfile.NamedTemporaryFile(
             dir=WORK_DIR, prefix="jasper_audio.", delete=False
         )
-        audio_file.write(audio_data)
+        # audio_file.write(audio_data)
         audio_file.close()
         audio_file_path = audio_file.name
+        wf = wave.open(audio_file_path, "w")
+        wf.setnchannels(1)
+        wf.setsampwidth(2)
+        wf.setframerate(16000)
+        wf.writeframesraw(audio_data)
+        wf.close()
         manifest = {"audio_filepath": audio_file_path, "duration": 60, "text": "todo"}
         manifest_file = tempfile.NamedTemporaryFile(
             dir=WORK_DIR, prefix="jasper_manifest.", delete=False, mode="w"
@@ -69,32 +90,32 @@ class JasperASR(object):
         log_probs = self.jasper_decoder(encoder_output=encoded)
         predictions = self.greedy_decoder(log_probs=log_probs)
 
-        # if ENABLE_NGRAM:
-        #     logging.info('Running with beam search')
-        #     beam_predictions = beam_search_with_lm(log_probs=log_probs, log_probs_length=encoded_len)
-        #     eval_tensors = [beam_predictions]
-
-        # if greedy:
-        eval_tensors = [predictions]
+        if greedy:
+            eval_tensors = [predictions]
+        else:
+            if self.beam_search_with_lm:
+                logging.info("Running with beam search")
+                beam_predictions = self.beam_search_with_lm(
+                    log_probs=log_probs, log_probs_length=encoded_len
+                )
+                eval_tensors = [beam_predictions]
+            else:
+                logging.info(
+                    "language_model not specified. falling back to greedy decoding."
+                )
+                eval_tensors = [predictions]
 
         tensors = self.neural_factory.infer(tensors=eval_tensors)
-        if greedy:
-            from nemo.collections.asr.helpers import post_process_predictions
-
-            prediction = post_process_predictions(tensors[0], self.labels)
-        else:
-            prediction = tensors[0][0][0][0][1]
+        prediction = post_process_predictions(tensors[0], self.labels)
         prediction_text = ". ".join(prediction)
         return prediction_text
 
-    def transcribe_file(self, audio_file):
+    def transcribe_file(self, audio_file, *args, **kwargs):
         tscript_file_path = audio_file.with_suffix(".txt")
         audio_file_path = str(audio_file)
-        try:
-            with open(audio_file_path, "rb") as af:
-                audio_data = af.read()
-                transcription = self.transcribe(audio_data)
-                with open(tscript_file_path, "w") as tf:
-                    tf.write(transcription)
-        except BaseException as e:
-            logging.info(f"an error occurred during transcrption: {e}")
+        with wave.open(audio_file_path, "r") as af:
+            frame_count = af.getnframes()
+            audio_data = af.readframes(frame_count)
+            transcription = self.transcribe(audio_data, *args, **kwargs)
+            with open(tscript_file_path, "w") as tf:
+                tf.write(transcription)
