@@ -20,8 +20,8 @@ setup(
     packages=["."],
     entry_points={
         "console_scripts": [
-            "jasper_transcribe = jasper.__main__:main",
-            "asr_rpyc_server = jasper.server:main",
+            "jasper_transcribe = jasper.transcribe:main",
+            "jasper_asr_rpyc_server = jasper.server:main",
         ]
     },
     zip_safe=False,

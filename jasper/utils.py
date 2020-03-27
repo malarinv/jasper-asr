@@ -1,7 +1,6 @@
 import os
 import argparse
 from pathlib import Path
-from .asr import JasperASR
 
 MODEL_YAML = os.environ.get("JASPER_MODEL_CONFIG", "/models/jasper/jasper10x5dr.yaml")
 CHECKPOINT_ENCODER = os.environ.get(
@@ -13,18 +12,9 @@ CHECKPOINT_DECODER = os.environ.get(
 KEN_LM = os.environ.get("JASPER_KEN_LM", "/models/jasper/kenlm.pt")
 
 
-def arg_parser():
-    prog = Path(__file__).stem
+def arg_parser(prog):
     parser = argparse.ArgumentParser(
-        prog=prog, description=f"generates transcription of the audio_file"
-    )
-    parser.add_argument(
-        "audio_file",
-        type=Path,
-        help="audio file(16khz 1channel int16 wav) to transcribe",
-    )
-    parser.add_argument(
-        "--greedy", type=bool, default=False, help="enables greedy decoding"
+        prog=prog, description=f"convert speech to text"
     )
     parser.add_argument(
         "--model_yaml",
@@ -48,13 +38,3 @@ def arg_parser():
         "--language_model", type=Path, default=None, help="kenlm language model file"
     )
     return parser
-
-
-def main():
-    parser = arg_parser()
-    args = parser.parse_args()
-    args_dict = vars(args)
-    audio_file = args_dict.pop("audio_file")
-    greedy = args_dict.pop("greedy")
-    jasper_asr = JasperASR(**args_dict)
-    jasper_asr.transcribe_file(audio_file, greedy)
