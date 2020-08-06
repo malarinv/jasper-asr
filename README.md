@@ -7,9 +7,15 @@
 
 # Table of Contents
 
+* [Prerequisites](#prerequisites)
 * [Features](#features)
 * [Installation](#installation)
 * [Usage](#usage)
+
+# Prerequisites
+```bash
+# apt install libsndfile-dev ffmpeg
+```
 
 # Features
 

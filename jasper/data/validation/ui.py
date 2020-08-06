@@ -42,7 +42,9 @@ if not hasattr(st, "mongo_connected"):
             upsert=True,
         )
 
-    def set_task_fn(mf_path):
+    def set_task_fn(mf_path, task_id):
+        if task_id:
+            st.task_id = task_id
         task_path = mf_path.parent / Path(f"task-{st.task_id}.lck")
         if not task_path.exists():
             print(f"creating task lock at {task_path}")
@@ -66,8 +68,8 @@ def load_ui_data(validation_ui_data_path: Path):
 
 
 @app.command()
-def main(manifest: Path):
-    st.set_task(manifest)
+def main(manifest: Path, task_id: str = ""):
+    st.set_task(manifest, task_id)
     ui_config = load_ui_data(manifest)
     asr_data = ui_config["data"]
     use_domain_asr = ui_config.get("use_domain_asr", True)
