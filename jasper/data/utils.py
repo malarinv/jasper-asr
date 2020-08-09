@@ -58,83 +58,88 @@ def asr_data_writer(output_dir, dataset_name, asr_data_source, verbose=False):
     return num_datapoints
 
 
-def ui_dump_manifest_writer(output_dir, dataset_name, asr_data_source, verbose=False):
+def ui_data_generator(output_dir, dataset_name, asr_data_source, verbose=False):
     dataset_dir = output_dir / Path(dataset_name)
     (dataset_dir / Path("wav")).mkdir(parents=True, exist_ok=True)
-    ui_dump_file = dataset_dir / Path("ui_dump.json")
     (dataset_dir / Path("wav_plots")).mkdir(parents=True, exist_ok=True)
-    asr_manifest = dataset_dir / Path("manifest.json")
+
+    def data_fn(
+        transcript,
+        audio_dur,
+        wav_data,
+        caller_name,
+        aud_seg,
+        fname,
+        audio_path,
+        num_datapoints,
+        rel_data_path,
+    ):
+        pretrained_result = transcriber_pretrained(aud_seg.raw_data)
+        pretrained_wer = word_error_rate([transcript], [pretrained_result])
+        png_path = Path(fname).with_suffix(".png")
+        wav_plot_path = dataset_dir / Path("wav_plots") / png_path
+        if not wav_plot_path.exists():
+            plot_seg(wav_plot_path, audio_path)
+        return {
+            "audio_filepath": str(rel_data_path),
+            "duration": round(audio_dur, 1),
+            "text": transcript,
+            "real_idx": num_datapoints,
+            "audio_path": audio_path,
+            "spoken": transcript,
+            "caller": caller_name,
+            "utterance_id": fname,
+            "pretrained_asr": pretrained_result,
+            "pretrained_wer": pretrained_wer,
+            "plot_path": str(wav_plot_path),
+        }
+
     num_datapoints = 0
-    ui_dump = {
-        "use_domain_asr": False,
-        "annotation_only": False,
-        "enable_plots": True,
-        "data": [],
-    }
     data_funcs = []
     transcriber_pretrained = transcribe_gen(asr_port=8044)
+    for transcript, audio_dur, wav_data, caller_name, aud_seg in asr_data_source:
+        fname = str(uuid4()) + "_" + slugify(transcript, max_length=8)
+        audio_file = dataset_dir / Path("wav") / Path(fname).with_suffix(".wav")
+        audio_file.write_bytes(wav_data)
+        audio_path = str(audio_file)
+        rel_data_path = audio_file.relative_to(dataset_dir)
+        data_funcs.append(
+            partial(
+                data_fn,
+                transcript,
+                audio_dur,
+                wav_data,
+                caller_name,
+                aud_seg,
+                fname,
+                audio_path,
+                num_datapoints,
+                rel_data_path,
+            )
+        )
+        num_datapoints += 1
+    ui_data = parallel_apply(lambda x: x(), data_funcs)
+    return ui_data, num_datapoints
+
+
+def ui_dump_manifest_writer(output_dir, dataset_name, asr_data_source, verbose=False):
+    dataset_dir = output_dir / Path(dataset_name)
+    dump_data, num_datapoints = ui_data_generator(
+        output_dir, dataset_name, asr_data_source, verbose=verbose
+    )
+
+    asr_manifest = dataset_dir / Path("manifest.json")
     with asr_manifest.open("w") as mf:
         print(f"writing manifest to {asr_manifest}")
-
-        def data_fn(
-            transcript,
-            audio_dur,
-            wav_data,
-            caller_name,
-            aud_seg,
-            fname,
-            audio_path,
-            num_datapoints,
-            rel_data_path,
-        ):
-            pretrained_result = transcriber_pretrained(aud_seg.raw_data)
-            pretrained_wer = word_error_rate([transcript], [pretrained_result])
-            wav_plot_path = (
-                dataset_dir / Path("wav_plots") / Path(fname).with_suffix(".png")
-            )
-            if not wav_plot_path.exists():
-                plot_seg(wav_plot_path, audio_path)
-            return {
-                "audio_filepath": str(rel_data_path),
-                "duration": round(audio_dur, 1),
-                "text": transcript,
-                "real_idx": num_datapoints,
-                "audio_path": audio_path,
-                "spoken": transcript,
-                "caller": caller_name,
-                "utterance_id": fname,
-                "pretrained_asr": pretrained_result,
-                "pretrained_wer": pretrained_wer,
-                "plot_path": str(wav_plot_path),
-            }
-
-        for transcript, audio_dur, wav_data, caller_name, aud_seg in asr_data_source:
-            fname = str(uuid4()) + "_" + slugify(transcript, max_length=8)
-            audio_file = dataset_dir / Path("wav") / Path(fname).with_suffix(".wav")
-            audio_file.write_bytes(wav_data)
-            audio_path = str(audio_file)
-            rel_data_path = audio_file.relative_to(dataset_dir)
+        for d in dump_data:
+            rel_data_path = d["audio_filepath"]
+            audio_dur = d["duration"]
+            transcript = d["text"]
             manifest = manifest_str(str(rel_data_path), audio_dur, transcript)
             mf.write(manifest)
-            data_funcs.append(
-                partial(
-                    data_fn,
-                    transcript,
-                    audio_dur,
-                    wav_data,
-                    caller_name,
-                    aud_seg,
-                    fname,
-                    audio_path,
-                    num_datapoints,
-                    rel_data_path,
-                )
-            )
-            num_datapoints += 1
-    dump_data = parallel_apply(lambda x: x(), data_funcs)
-    # dump_data = [x() for x in tqdm(data_funcs)]
-    ui_dump["data"] = dump_data
-    ExtendedPath(ui_dump_file).write_json(ui_dump)
+
+    ui_dump_file = dataset_dir / Path("ui_dump.json")
+    ExtendedPath(ui_dump_file).write_json({"data": dump_data})
     return num_datapoints
 
 
