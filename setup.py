@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 requirements = [
     "ruamel.yaml",
-    "torch==1.4.0",
+    "torch==2.2.0",
     "torchvision==0.5.0",
     "nemo_toolkit[asr] @ git+https://github.com/NVIDIA/NeMo.git@09e3ba4dfe333f86d6c5c1048e07210924294be9#egg=nemo_toolkit",
 ]
