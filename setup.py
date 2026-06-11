@@ -17,7 +17,7 @@ extra_requirements = {
         "pandas~=1.0.3",
         "boto3~=1.12.35",
         "ruamel.yaml==0.16.10",
-        "pymongo==3.10.1",
+        "pymongo==4.6.3",
         "librosa==0.7.2",
         "numba==0.48",
         "matplotlib==3.2.1",
@@ -32,7 +32,7 @@ extra_requirements = {
     ],
     "validation": [
         "rpyc~=4.1.4",
-        "pymongo==3.10.1",
+        "pymongo==4.6.3",
         "typer[all]==0.1.1",
         "tqdm~=4.39.0",
         "librosa==0.7.2",
