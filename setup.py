@@ -38,7 +38,7 @@ extra_requirements = {
         "librosa==0.7.2",
         "matplotlib==3.2.1",
         "pydub~=0.24.0",
-        "streamlit==0.58.0",
+        "streamlit==1.54.0",
         "natural==0.2.0",
         "stringcase==1.2.0",
         "google-cloud-speech~=1.3.1",
